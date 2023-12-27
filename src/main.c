@@ -42,6 +42,7 @@
 #include "wav_recorder.h"
 #include "testbench.h"
 #include "cartridge.h"
+#include "symbol_table.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -434,6 +435,8 @@ usage()
 	printf("\tSet the opacity value (0.0 for transparent, 1.0 for opaque) of the window. (default: %.1f)\n", window_opacity);
 	printf("-debug [<address>]\n");
 	printf("\tEnable debugger. Optionally, set a breakpoint\n");
+    printf("-symbols <symbol table>\n");
+	printf("\tSet symbol table. Memory locations in the table are considered symbols.\n");
 	printf("-randram\n");
 	printf("\t(deprecated, no effect)\n");
 	printf("-zeroram\n");
@@ -507,6 +510,7 @@ main(int argc, char **argv)
 	char *prg_path = NULL;
 	char *bas_path = NULL;
 	char *sdcard_path = NULL;
+    char *symbols_path = NULL;
 	bool run_test = false;
 	int test_number = 0;
 	int audio_buffers = 8;
@@ -753,6 +757,15 @@ main(int argc, char **argv)
 				argc--;
 				argv++;
 			}
+        } else if (!strcmp(argv[0], "-symbols")) {
+			argc--;
+			argv++;
+			if (!argc || argv[0][0] == '-') {
+				usage();
+			}
+			symbols_path = argv[0];
+            argc--;
+			argv++;
 		} else if (!strcmp(argv[0], "-randram")) {
 			/* this operation has no effect anymore, randomizing the Ram is now default */
 			argc--;
@@ -1026,6 +1039,21 @@ main(int argc, char **argv)
 			exit(1);
 		}
 	}
+
+    if (symbols_path) {
+        printf("Loading symbols...\n");
+        FILE *symbols_file;
+        symbols_file = fopen(symbols_path, "r");
+        if (symbols_file == NULL) {
+			printf("Cannot open %s!\n", symbols_path);
+			exit(1);
+		}
+        if (sym_load_symbols(symbols_file) != SYM_RESULT_SUCCESS) {
+            printf("Failed parsing symbols.\n");
+        }
+        fclose(symbols_file);
+        sym_print_symbols();
+    }
 
 	if (bas_path) {
 		SDL_RWops *bas_file = SDL_RWFromFile(bas_path, "r");
