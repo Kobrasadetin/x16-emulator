@@ -199,3 +199,17 @@ void DEBUGString(SDL_Renderer *renderer, int x, int y, char *s, SDL_Color colour
 		DEBUGWrite(renderer, x++, y, *s++, colour);
 	}
 }
+
+// *******************************************************************************************
+//
+//										Write 2-color string
+//
+// *******************************************************************************************
+
+void DEBUGString2col(SDL_Renderer *renderer, int x, int y, char *s, SDL_Color colour1, SDL_Color colour2) {
+    int i = 0;
+	while (*s != '\0') {        
+		DEBUGWrite(renderer, x++, y, *s++, i < 3 ? colour1 : colour2);
+        i++;
+	}
+}

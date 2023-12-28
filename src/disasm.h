@@ -8,5 +8,6 @@
 #include <stdint.h>
 
 int disasm(uint16_t pc, uint8_t *RAM, char *line, unsigned int max_line, bool debugOn, uint8_t bank, int32_t *eff_addr);
+int disasm_named_symbols(uint16_t pc, uint8_t *RAM, char *line, unsigned int max_line, bool debugOn, uint8_t bank, int32_t *eff_addr, char* type);
 
 #endif

@@ -19,10 +19,10 @@
 #define SYM_RESULT_FAIL (-1)
 #define SYM_EMPTY (1)
 
-#define SYM_UNDEFINED (0)
-#define SYM_FUNCTION (1)
-#define SYM_OBJECT (2)
-#define SYM_MULTIPLE (3)
+#define SYM_UNDEFINED (1)
+#define SYM_FUNCTION (2)
+#define SYM_OBJECT (3)
+#define SYM_MULTIPLE (4)
 
 #define SYM_BUFFER_SIZE (256)
 #define SYM_MAX_SYMBOLS (2048)
@@ -36,7 +36,7 @@ struct line_symbol {
 
 extern int symbol_count;
 
-int sym_find_symbol_by_address(int address);
+struct line_symbol *sym_find_symbol_by_address(int address);
 void sym_print_symbols();
 int sym_load_symbols(FILE *symbols_file);
 

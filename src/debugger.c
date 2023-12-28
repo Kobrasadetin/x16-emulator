@@ -16,6 +16,7 @@
 #include <inttypes.h>
 #include <SDL.h>
 #include "glue.h"
+#include "symbol_table.h"
 #include "timing.h"
 #include "disasm.h"
 #include "memory.h"
@@ -81,6 +82,7 @@ static void DEBUGExecCmd();
 #define DBGKEY_STEPOVER SDLK_F10                        // F10 is step over.
 #define DBGKEY_PAGE_NEXT	SDLK_KP_PLUS
 #define DBGKEY_PAGE_PREV	SDLK_KP_MINUS
+#define DBGKEY_SYMBOLS	SDLK_RCTRL
 
 #define DBGSCANKEY_BRK  SDL_SCANCODE_F12                // F12 is break into running code.
 #define DBGSCANKEY_SHOW SDL_SCANCODE_TAB                // Show screen key.
@@ -105,6 +107,20 @@ const SDL_Color col_vram_tiledata = {0, 255, 0, 255};
 const SDL_Color col_vram_special  = {255, 92, 92, 255};
 const SDL_Color col_vram_other  = {128, 128, 128, 255};
 
+const SDL_Color col_sym_unknown = {231, 121, 255, 255};
+const SDL_Color col_sym_function = {255, 225, 255, 255};
+const SDL_Color col_sym_object = {255, 255, 196, 255};
+const SDL_Color col_sym_multiple = {231, 121, 255, 255};
+
+// Symbol colors
+const SDL_Color* col_symbol_colors[] = {
+    &col_data,
+    &col_sym_unknown,
+    &col_sym_function,
+    &col_sym_object,
+    &col_sym_multiple,
+};
+
 int showDebugOnRender = 0;                               // Used to trigger rendering in video.c
 int showFullDisplay = 0;                                 // If non-zero show the whole thing.
 int currentPC = -1;                                      // Current PC value.
@@ -121,6 +137,7 @@ struct breakpoint stepBreakPoint = { -1, -1 };           // Single step break.
 char cmdLine[64]= "";                                    // command line buffer
 int currentPosInLine= 0;                                 // cursor position in the buffer (NOT USED _YET_)
 int currentLineLen= 0;                                   // command line buffer length
+int showSymbols = 0;
 
 int    oldRegisters[DBGMAX_ZERO_PAGE_REGISTERS];      // Old ZP Register values, for change detection
 char * oldRegChange[DBGMAX_ZERO_PAGE_REGISTERS];      // Change notification flags for output
@@ -313,6 +330,10 @@ static void DEBUGHandleKeyEvent(SDL_Keycode key,int isShift) {
 
 		case DBGKEY_PAGE_PREV:
 			currentBank -= 1;
+			break;
+
+        case DBGKEY_SYMBOLS:
+			showSymbols = showSymbols ^ 1;
 			break;
 
 		case SDLK_PAGEDOWN:
@@ -511,7 +532,7 @@ void DEBUGRenderDisplay(int width, int height) {
 	SDL_SetRenderDrawColor(dbgRenderer,0,0,0,SDL_ALPHA_OPAQUE);
 	SDL_RenderFillRect(dbgRenderer,&rc);
 
-	DEBUGRenderRegisters();							// Draw register name and values.
+	if (!showSymbols) DEBUGRenderRegisters();							// Draw register name and values.
 	DEBUGRenderCode(20, currentPC);							// Render 6502 disassembly.
 	if (dumpmode == DDUMP_RAM) {
 		DEBUGRenderData(21, currentData);
@@ -519,7 +540,7 @@ void DEBUGRenderDisplay(int width, int height) {
 	} else {
 		DEBUGRenderVRAM(21, currentData);
 	}
-	DEBUGRenderStack(20);
+    if (!showSymbols) DEBUGRenderStack(20);
 
 	DEBUGRenderCmdLine(xPos, rc.w, height);
 }
@@ -635,14 +656,40 @@ DEBUGRenderVRAM(int y, int data)
 
 static void DEBUGRenderCode(int lines, int initialPC) {
 	char buffer[32];
+    int last_named_function = -1; // set to address when named function has been rendered
 	for (int y = 0; y < lines; y++) { 							// Each line
-
+        if (showSymbols && last_named_function != initialPC) {
+            struct line_symbol* symbol = sym_find_symbol_by_address(initialPC);
+            if (symbol!= NULL && symbol->type == SYM_FUNCTION) {
+                DEBUGString(dbgRenderer, DBG_ASMX+1, y, symbol->name, col_sym_function);
+                last_named_function = initialPC;
+                continue;
+            }
+        }
 		DEBUGAddress(DBG_ASMX, y, currentPCBank, initialPC, col_label);
 		int32_t eff_addr;
-
-		int size = disasm(initialPC, RAM, buffer, sizeof(buffer), true, currentPCBank, &eff_addr);	// Disassemble code
+        char type = 0;
+		int size = showSymbols ? 
+            disasm_named_symbols(initialPC, RAM, buffer, sizeof(buffer), true, currentPCBank, &eff_addr, &type) :        
+            disasm(initialPC, RAM, buffer, sizeof(buffer), true, currentPCBank, &eff_addr);	// Disassemble code
+        int controlFlow = type & 0x10;
+        type &= 0x0f;
 		// Output assembly highlighting PC
-		DEBUGString(dbgRenderer, DBG_ASMX+8, y, buffer, initialPC == pc ? col_highlight : col_data);
+        if (type == 0) {
+		    DEBUGString(dbgRenderer, DBG_ASMX+8, y, buffer, initialPC == pc ? col_highlight : col_data);
+        } else {
+            // int controlFlow = type & 0x10;
+            DEBUGString2col(
+                dbgRenderer,
+                DBG_ASMX+8,
+                y,
+                buffer,
+                initialPC == pc ? col_highlight :
+                    controlFlow ? col_sym_function :
+                     col_data,
+                initialPC == pc ? col_highlight :
+                    *col_symbol_colors[(size_t)type]);
+        }
 		initialPC = (initialPC + size) & 0xffff;										// Forward to next
 	}
 }

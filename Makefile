@@ -80,7 +80,7 @@ all: x16emu makecart
 x16emu: $(X16_OBJS)
 	$(CXX) -o $(X16_OUTPUT) $(X16_OBJS) $(LDFLAGS)
 
-$(X16_ODIR)/%.o: $(X16_SDIR)/%.c
+$(X16_ODIR)/%.o: $(X16_SDIR)/%.c src/cpu/mnemonics.h
 	@mkdir -p $$(dirname $@)
 	$(CC) $(CFLAGS) -c $< -MD -MT $@ -MF $(@:%o=%d) -o $@
 
@@ -95,8 +95,8 @@ $(MAKECART_ODIR)/%.o: $(MAKECART_SDIR)/%.c
 	@mkdir -p $$(dirname $@)
 	$(CC) $(CFLAGS) -c $< -MD -MT $@ -MF $(@:%o=%d) -o $@
 
-cpu/tables.h cpu/mnemonics.h: cpu/buildtables.py cpu/6502.opcodes cpu/65c02.opcodes
-	cd cpu && python buildtables.py
+src/cpu/tables.h src/cpu/mnemonics.h: src/cpu/buildtables.py src/cpu/6502.opcodes src/cpu/65c02.opcodes
+	cd src/cpu && python buildtables.py
 
 # Empty rules so that renames of header files do not trigger a failure to compile
 $(X16_SDIR)/%.h:;
@@ -109,7 +109,7 @@ wasm:
 	emmake make
 
 clean:
-	rm -rf $(X16_ODIR) $(MAKECART_ODIR) x16emu x16emu.exe x16emu.js x16emu.wasm x16emu.data x16emu.worker.js x16emu.html x16emu.html.mem makecart makecart.exe makecart.js makecart.wasm makecart.data makecart.worker.js makecart.html makecart.html.mem
+	rm -rf $(X16_ODIR) $(MAKECART_ODIR) x16emu x16emu.exe x16emu.js x16emu.wasm x16emu.data x16emu.worker.js x16emu.html x16emu.html.mem makecart makecart.exe makecart.js makecart.wasm makecart.data makecart.worker.js makecart.html makecart.html.mem cpu/mnemonics.h
 
 ifeq ($(filter $(MAKECMDGOALS), clean),)
 -include $(X16_DEPS)

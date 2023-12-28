@@ -8,37 +8,11 @@
 #include <string.h>
 #include "memory.h"
 #include "glue.h"
+#include "symbol_table.h"
 
 #include "cpu/mnemonics.h"				// Automatically generated mnemonic table.
 
-// *******************************************************************************************
-//
-//		Disassemble a single 65C02 instruction into buffer. Returns the length of the
-//		instruction in total in bytes.
-//
-// *******************************************************************************************
-
-int disasm(uint16_t pc, uint8_t *RAM, char *line, unsigned int max_line, bool debugOn, uint8_t bank, int32_t *eff_addr) {
-	uint8_t opcode = real_read6502(pc, debugOn, bank);
-	char const *mnemonic = mnemonics[opcode];
-
-	*eff_addr = -1;
-
-	//
-	//		Test for branches, relative address. These are BRA ($80) and
-	//		$10,$30,$50,$70,$90,$B0,$D0,$F0.
-	//
-	//
-	int isBranch = (opcode == 0x80) || ((opcode & 0x1F) == 0x10);
-	//
-	//		Ditto bbr and bbs, the "zero-page, relative" ops.
-	//		$0F,$1F,$2F,$3F,$4F,$5F,$6F,$7F,$8F,$9F,$AF,$BF,$CF,$DF,$EF,$FF
-	//
-	int isZprel  = (opcode & 0x0F) == 0x0F;
-	//
-	//      X relative opcodes (including indirect/indexed)
-	//
-	int isXrel = 0;
+int isXrelOpcode(uint8_t opcode) {
 	switch (opcode) {
 		case 0x01: // ora (zp,x)
 		case 0x15: // ora zp,x
@@ -83,11 +57,42 @@ int disasm(uint16_t pc, uint8_t *RAM, char *line, unsigned int max_line, bool de
 		case 0xf6: // inc zp,x
 		case 0xfd: // sbc abs,x
 		case 0xfe: // inc abs,x
-			isXrel = 1;
+			return 1;
 			;;
 		default:
+            return 0;
 			;;
 	} 
+}
+
+// *******************************************************************************************
+//
+//		Disassemble a single 65C02 instruction into buffer. Returns the length of the
+//		instruction in total in bytes.
+//
+// *******************************************************************************************
+
+int disasm(uint16_t pc, uint8_t *RAM, char *line, unsigned int max_line, bool debugOn, uint8_t bank, int32_t *eff_addr) {
+	uint8_t opcode = real_read6502(pc, debugOn, bank);
+	char const *mnemonic = mnemonics[opcode];
+
+	*eff_addr = -1;
+
+	//
+	//		Test for branches, relative address. These are BRA ($80) and
+	//		$10,$30,$50,$70,$90,$B0,$D0,$F0.
+	//
+	//
+	int isBranch = (opcode == 0x80) || ((opcode & 0x1F) == 0x10);
+	//
+	//		Ditto bbr and bbs, the "zero-page, relative" ops.
+	//		$0F,$1F,$2F,$3F,$4F,$5F,$6F,$7F,$8F,$9F,$AF,$BF,$CF,$DF,$EF,$FF
+	//
+	int isZprel  = (opcode & 0x0F) == 0x0F;
+	//
+	//      X relative opcodes (including indirect/indexed)
+	//
+	int isXrel = isXrelOpcode(opcode);
 
 	// is opcode immedaite?
 
@@ -136,6 +141,132 @@ int disasm(uint16_t pc, uint8_t *RAM, char *line, unsigned int max_line, bool de
 		if (strstr(line, "%04x")) {
 			length = 3;
 			snprintf(line, max_line, mnemonic, real_read6502(pc + 1, debugOn, bank) | real_read6502(pc + 2, debugOn, bank) << 8);
+			if (isIndirect) {
+				uint16_t ptr = real_read6502(pc + 1, debugOn, bank) | (real_read6502(pc + 2, debugOn, bank) << 8);
+				if (isXrel)
+					ptr += x;
+				*eff_addr = real_read6502(ptr, debugOn, bank) | (real_read6502(ptr + 1, debugOn, bank) << 8);
+				if (isYrel)
+					*eff_addr += y;
+			} else {
+				*eff_addr = real_read6502(pc + 1, debugOn, bank) | (real_read6502(pc + 2, debugOn, bank) << 8);
+				if (isXrel)
+					*eff_addr += x;
+				if (isYrel)
+					*eff_addr += y;
+			}
+		}
+		if (opcode == 0x00) { 
+			// BRK instruction is 2 bytes long according to WDC datasheet.
+			// CPU skips the second byte when it executes a BRK.
+			length = 2;
+		}
+	}
+	return length;
+}
+
+int disasm_named_symbols(uint16_t pc, uint8_t *RAM, char *line, unsigned int max_line, bool debugOn, uint8_t bank, int32_t *eff_addr, char* type) {
+	uint8_t opcode = real_read6502(pc, debugOn, bank);
+    char const *numeric = mnemonics[opcode];
+	char const *mnemonic = sym_mnemonics[opcode];
+	
+    *eff_addr = -1;
+
+	//
+	//		Test for branches, relative address. These are BRA ($80) and
+	//		$10,$30,$50,$70,$90,$B0,$D0,$F0.
+	//
+	//
+	int isBranch = (opcode == 0x80) || ((opcode & 0x1F) == 0x10);
+	//
+	//		Ditto bbr and bbs, the "zero-page, relative" ops.
+	//		$0F,$1F,$2F,$3F,$4F,$5F,$6F,$7F,$8F,$9F,$AF,$BF,$CF,$DF,$EF,$FF
+	//
+	int isZprel  = (opcode & 0x0F) == 0x0F;
+	//
+	//      X relative opcodes (including indirect/indexed)
+	//
+	int isXrel = isXrelOpcode(opcode);
+
+	// is opcode immediate?
+
+	int isImmediate = (((opcode & 0x1f) == 0x09) || opcode == 0xa0 || opcode == 0xa2 || opcode == 0xc0 || opcode == 0xe0);
+
+	//
+	//      Y relative opcodes (including indirect/indexed)
+	//	$x1 and $x9 (for odd values of x), as well as $96 and $B6
+	int isYrel = (((opcode & 0x17) == 0x11) || opcode == 0x96 || opcode == 0xb6);
+
+	//
+	//      indirect
+	//  $x1 and ($x2 where x is odd)
+	//  as well as $6C and $7C
+	int isIndirect = (((opcode & 0x0f) == 0x01) || ((opcode & 0x1f) == 0x12) || opcode == 0x6c || opcode == 0x7c);
+
+    int isControlFlow = (opcode == 0x4c || opcode == 0x6c || opcode == 0x7c ||opcode == 0x20 || opcode == 0x40) || isBranch;
+    *type = isControlFlow ? 0x10: 0; // high nibble of type tells instruction type
+
+	int length   = 1;
+	strncpy(line,mnemonic,max_line);
+
+	if (isZprel) {
+        int addr_zp = real_read6502(pc + 1, debugOn, bank);
+        struct line_symbol *symbol = sym_find_symbol_by_address(addr_zp);
+        if (symbol == NULL) {
+            snprintf(line, max_line, mnemonic, real_read6502(pc + 1, debugOn, bank), pc + 3 + (int8_t)real_read6502(pc + 2, debugOn, bank));
+        } else {
+            *type |= symbol->type;
+		    snprintf(line, max_line, numeric, symbol->name, pc + 3 + (int8_t)real_read6502(pc + 2, debugOn, bank));
+        }
+		length = 3;
+	} else {
+		if (strstr(numeric, "%02x")) {
+			length = 2;
+			if (isBranch) {
+                int addr = pc + 2 + (int8_t)real_read6502(pc + 1, debugOn, bank);
+                struct line_symbol *symbol = sym_find_symbol_by_address(addr);
+                if (symbol == NULL) {
+                    snprintf(line, max_line, numeric, pc + 2 + (int8_t)real_read6502(pc + 1, debugOn, bank));
+                } else {
+                    *type |= symbol->type;
+				    snprintf(line, max_line, mnemonic, symbol->name);
+                }
+			} else {
+                int addr = real_read6502(pc + 1, debugOn, bank);
+                struct line_symbol *symbol = sym_find_symbol_by_address(addr);
+                if (symbol == NULL || isImmediate) {
+                    snprintf(line, max_line, numeric, real_read6502(pc + 1, debugOn, bank));
+                } else {
+                    *type |= symbol->type;
+				    snprintf(line, max_line, mnemonic, symbol->name);
+                }
+				if (isIndirect) {
+					uint16_t ptr = real_read6502(pc + 1, debugOn, bank);
+					if (isXrel)
+						ptr += x;
+					*eff_addr = real_read6502(ptr, debugOn, bank) | (real_read6502(ptr + 1, debugOn, bank) << 8);
+					if (isYrel)
+						*eff_addr += y;
+				} else if (!isImmediate) {
+					*eff_addr = real_read6502(pc + 1, debugOn, bank);
+					if (isXrel)
+						*eff_addr += x;
+					if (isYrel)
+						*eff_addr += y;
+				}
+			}
+		}
+		if (strstr(numeric, "%04x")) {
+			length = 3;
+            int addr = real_read6502(pc + 1, debugOn, bank) | (real_read6502(pc + 2, debugOn, bank) << 8);
+            struct line_symbol *symbol = sym_find_symbol_by_address(addr);
+            if (symbol == NULL) {
+			    snprintf(line, max_line, numeric, real_read6502(pc + 1, debugOn, bank) | real_read6502(pc + 2, debugOn, bank) << 8);
+            }
+            else {
+                *type |= symbol->type;
+				snprintf(line, max_line, mnemonic, symbol->name);
+            }
 			if (isIndirect) {
 				uint16_t ptr = real_read6502(pc + 1, debugOn, bank) | (real_read6502(pc + 2, debugOn, bank) << 8);
 				if (isXrel)

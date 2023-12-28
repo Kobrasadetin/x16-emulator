@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "symbol_table.h"
+#include "symbol_table_defaults.h"
 
 struct line_symbol symbols[SYM_MAX_SYMBOLS];
 int symbol_count = 0;
@@ -16,7 +17,8 @@ int compare_symbols(const void *a, const void *b) {
     else return 0;
 }
 
-int sym_find_symbol_by_address(int address) {
+// find from unsorted array
+int find_symbol_by_address(int address) {
     for (int i = 0; i < symbol_count; i++) {
         if (symbols[i].address == address) {
             return i; // Return index of the found symbol
@@ -25,20 +27,33 @@ int sym_find_symbol_by_address(int address) {
     return -1; // Symbol not found
 }
 
+struct line_symbol *sym_find_symbol_by_address(int address) {
+    int low = 0;
+    int high = symbol_count - 1;
+
+    while (low <= high) {
+        int mid = low + (high - low) / 2;
+        if (symbols[mid].address == address) {
+            return &symbols[mid]; // Symbol found
+        } else if (symbols[mid].address < address) {
+            low = mid + 1;
+        } else {
+            high = mid - 1;
+        }
+    }
+    return NULL; // Symbol not found
+}
+
+// Print the symbols currently loaded
 void sym_print_symbols() {
     printf("Loaded Symbols:\n");
     for (int i = 0; i < symbol_count; i++) {
-        // Print the symbol address in hex format, zero-padded to 6 characters
         printf("At: %06lx, ", (long unsigned)symbols[i].address);
-
-        // Print the symbol type with fixed width
-        printf("%-10s", // Adjust the width as needed for alignment
+        printf("%-10s",
             symbols[i].type == SYM_FUNCTION ? "Function" :
             symbols[i].type == SYM_OBJECT ? "Object" :
             symbols[i].type == SYM_MULTIPLE ? "Multiple" :
             "Undefined");
-
-        // Print the symbol name
         printf("%s\n", symbols[i].name);
     }
 }
@@ -63,9 +78,10 @@ int is_whitespace_line(const char *line) {
     return 1; // The line is all whitespace
 }
 
+// parses a mos-llvm objdump file. Other formats could and should be supported
 int parse_symbol_line(const char *line, struct line_symbol *symbol) {
-    char hex_address[9]; // 8 chars for address + 1 for '\0'
-    char type_name[3];   // 2 chars for type + 1 for '\0'
+    char hex_address[9];
+    char type_name[3]; 
     char name[SYM_BUFFER_SIZE];
 
     if (is_whitespace_line(line)) return SYM_EMPTY;
@@ -111,6 +127,35 @@ int parse_symbol_line(const char *line, struct line_symbol *symbol) {
     return SYM_RESULT_SUCCESS;
 }
 
+// add_symbol makes a deep copy, so the caller can dispose of the temp_symbol
+int add_symbol(struct line_symbol temp_symbol, int weak) {
+    int existing_index = find_symbol_by_address(temp_symbol.address);
+    if (existing_index != -1) {
+        if (weak) {
+            return SYM_RESULT_SUCCESS; // don't overwrite
+        }
+        // Symbol with the same address exists, merge
+        symbols[existing_index].type = SYM_MULTIPLE;
+        size_t new_name_length = strlen(symbols[existing_index].name) + strlen(temp_symbol.name) + 2;
+        char *new_name = malloc(new_name_length);
+        if (new_name == NULL) {
+            return SYM_RESULT_FAIL;
+        }
+        snprintf(new_name, new_name_length, "%s %s", symbols[existing_index].name, temp_symbol.name);
+        // free dynamically allocated memory
+        free(symbols[existing_index].name);
+        symbols[existing_index].name = new_name;
+    } else {
+        // New symbol, add to array
+        char *new_name = malloc(strlen(temp_symbol.name));
+        strncpy(new_name, temp_symbol.name, strlen(temp_symbol.name));
+        symbols[symbol_count] = temp_symbol;
+        symbols[symbol_count].name = new_name;
+        symbol_count++;
+    }
+    return SYM_RESULT_SUCCESS;
+}
+
 int sym_load_symbols(FILE *symbols_file) {
     char buffer[SYM_BUFFER_SIZE];
     int line_count = 0;
@@ -129,30 +174,24 @@ int sym_load_symbols(FILE *symbols_file) {
             struct line_symbol temp_symbol;
             int parse_result = parse_symbol_line(buffer, &temp_symbol);
             if (parse_result== SYM_RESULT_SUCCESS) {
-                int existing_index = sym_find_symbol_by_address(temp_symbol.address);
-                if (existing_index != -1) {
-                    // Symbol with the same address exists, merge names
-                    size_t new_name_length = strlen(symbols[existing_index].name) + strlen(temp_symbol.name) + 2;
-                    char *new_name = malloc(new_name_length);
-                    if (new_name == NULL) {
-                        return SYM_RESULT_FAIL;
-                    }
-                    snprintf(new_name, new_name_length, "%s,%s", symbols[existing_index].name, temp_symbol.name);
-                    free(symbols[existing_index].name);
-                    symbols[existing_index].name = new_name;
-                    symbols[existing_index].type = SYM_MULTIPLE;
-                } else {
-                    // New symbol, add to array
-                    symbols[symbol_count] = temp_symbol;
-                    symbol_count++;
-                }
-            } else if (parse_result== SYM_EMPTY){
-                ; // continue
-            }else {
+                parse_result = add_symbol(temp_symbol, 0);
+                free(temp_symbol.name);
+            } 
+            if (parse_result== SYM_EMPTY) {
+                continue;
+            }
+            if (parse_result != SYM_RESULT_SUCCESS) {
                 return SYM_RESULT_FAIL;
             }
         }
     }
+    size_t default_symbol_count = sizeof(sym_default_symbols) / sizeof(struct line_symbol);
+    for (size_t i = 0; i < default_symbol_count && symbol_count < SYM_MAX_SYMBOLS; i++) {
+        if (add_symbol(sym_default_symbols[i], 1) != SYM_RESULT_SUCCESS) {
+            return SYM_RESULT_FAIL; // Fail if unable to add symbol
+        }
+    }
+
     qsort(symbols, symbol_count, sizeof(struct line_symbol), compare_symbols);
     return symbol_count > 0 ? SYM_RESULT_SUCCESS : SYM_RESULT_FAIL;
 }
