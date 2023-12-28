@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include "symbol_table.h"
 
+struct line_symbol sym_default_overrides[] = {
+    {0x0000, 1, "RAM_bank"},
+    {0x0001, 1, "ROM_bank"},
+};
+
 struct line_symbol sym_default_symbols[] = {
 
 // VERA addresses
@@ -226,8 +231,8 @@ struct line_symbol sym_default_symbols[] = {
     {0x9FB6, 1, "DBG_WAV"},
     {0x9FB7, 1, "DBG_CMD"},
     {0x9FB8, 1, "DBG_CLK0"},
-    {0x9FB9, 1, "DBG_CLK1"},
-    {0x9FBA, 1, "DBG_CLK2"},
+    {0x9FB9, 1, "DBG_1/CLK1"},
+    {0x9FBA, 1, "DBG_2/CLK2"},
     {0x9FBB, 1, "DBG_CLK3"},
     // {0x9FBC, 1, "DBG_NONE"},
     {0x9FBD, 1, "DBG_KEYMP"},

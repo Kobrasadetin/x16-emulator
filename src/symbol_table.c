@@ -5,6 +5,10 @@
 #include "symbol_table.h"
 #include "symbol_table_defaults.h"
 
+#define ON_COLLISION_MERGE (0)
+#define ON_COLLISION_DISCARD (1)
+#define ON_COLLISION_OVERRIDE (2)
+
 struct line_symbol symbols[SYM_MAX_SYMBOLS];
 int symbol_count = 0;
 
@@ -127,15 +131,29 @@ int parse_symbol_line(const char *line, struct line_symbol *symbol) {
     return SYM_RESULT_SUCCESS;
 }
 
+char *remove_leading_underscores(char *str) {
+    while (*str == '_') {
+        str++;
+    }
+    return str;
+}
+
 // add_symbol makes a deep copy, so the caller can dispose of the temp_symbol
-int add_symbol(struct line_symbol temp_symbol, int weak) {
+int add_symbol(struct line_symbol temp_symbol, int on_collision) {
     int existing_index = find_symbol_by_address(temp_symbol.address);
     if (existing_index != -1) {
-        if (weak) {
+        if (on_collision == ON_COLLISION_DISCARD) {
             return SYM_RESULT_SUCCESS; // don't overwrite
         }
-        // Symbol with the same address exists, merge
-        symbols[existing_index].type = SYM_MULTIPLE;
+        if (on_collision == ON_COLLISION_OVERRIDE) {
+            symbols[existing_index].name[0] = '\0'; // remove old name
+        }
+        // Symbol with the same address exists, merge if not same name
+        char *stripped_name = remove_leading_underscores(temp_symbol.name);
+        if (strstr(symbols[existing_index].name, stripped_name) != NULL) {
+            return SYM_RESULT_SUCCESS;
+        }
+
         size_t new_name_length = strlen(symbols[existing_index].name) + strlen(temp_symbol.name) + 2;
         char *new_name = malloc(new_name_length);
         if (new_name == NULL) {
@@ -146,6 +164,7 @@ int add_symbol(struct line_symbol temp_symbol, int weak) {
         // free dynamically allocated memory
         free(symbols[existing_index].name);
         symbols[existing_index].name = new_name;
+        symbols[existing_index].type = on_collision == ON_COLLISION_OVERRIDE ? temp_symbol.type : SYM_MULTIPLE;
     } else {
         // New symbol, add to array
         size_t new_len = strlen(temp_symbol.name) + 1;
@@ -188,9 +207,15 @@ int sym_load_symbols(FILE *symbols_file) {
             }
         }
     }
+    size_t override_symbol_count = sizeof(sym_default_overrides) / sizeof(struct line_symbol);
+    for (size_t i = 0; i < override_symbol_count && symbol_count < SYM_MAX_SYMBOLS; i++) {
+        if (add_symbol(sym_default_overrides[i], ON_COLLISION_OVERRIDE) != SYM_RESULT_SUCCESS) {
+            return SYM_RESULT_FAIL; // Fail if unable to add symbol
+        }
+    }
     size_t default_symbol_count = sizeof(sym_default_symbols) / sizeof(struct line_symbol);
     for (size_t i = 0; i < default_symbol_count && symbol_count < SYM_MAX_SYMBOLS; i++) {
-        if (add_symbol(sym_default_symbols[i], 1) != SYM_RESULT_SUCCESS) {
+        if (add_symbol(sym_default_symbols[i], ON_COLLISION_DISCARD) != SYM_RESULT_SUCCESS) {
             return SYM_RESULT_FAIL; // Fail if unable to add symbol
         }
     }
