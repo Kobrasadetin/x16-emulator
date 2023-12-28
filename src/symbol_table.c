@@ -142,6 +142,7 @@ int add_symbol(struct line_symbol temp_symbol, int weak) {
             return SYM_RESULT_FAIL;
         }
         snprintf(new_name, new_name_length, "%s %s", symbols[existing_index].name, temp_symbol.name);
+        new_name[new_name_length - 1] = '\0';
         // free dynamically allocated memory
         free(symbols[existing_index].name);
         symbols[existing_index].name = new_name;
@@ -150,7 +151,7 @@ int add_symbol(struct line_symbol temp_symbol, int weak) {
         size_t new_len = strlen(temp_symbol.name) + 1;
         char *new_name = malloc(new_len);
         strncpy(new_name, temp_symbol.name, new_len - 1);
-        new_name[new_len -1] = '\0';
+        new_name[new_len - 1] = '\0';
         symbols[symbol_count] = temp_symbol;
         symbols[symbol_count].name = new_name;
         symbol_count++;

@@ -213,10 +213,10 @@ int disasm_named_symbols(uint16_t pc, uint8_t *RAM, char *line, unsigned int max
         int addr_zp = real_read6502(pc + 1, debugOn, bank);
         struct line_symbol *symbol = sym_find_symbol_by_address(addr_zp);
         if (symbol == NULL) {
-            snprintf(line, max_line, mnemonic, real_read6502(pc + 1, debugOn, bank), pc + 3 + (int8_t)real_read6502(pc + 2, debugOn, bank));
+            snprintf(line, max_line, numeric, real_read6502(pc + 1, debugOn, bank), pc + 3 + (int8_t)real_read6502(pc + 2, debugOn, bank));
         } else {
             *type |= symbol->type;
-		    snprintf(line, max_line, numeric, symbol->name, pc + 3 + (int8_t)real_read6502(pc + 2, debugOn, bank));
+		    snprintf(line, max_line, mnemonic, symbol->name, pc + 3 + (int8_t)real_read6502(pc + 2, debugOn, bank));
         }
 		length = 3;
 	} else {
