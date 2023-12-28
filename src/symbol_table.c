@@ -147,8 +147,10 @@ int add_symbol(struct line_symbol temp_symbol, int weak) {
         symbols[existing_index].name = new_name;
     } else {
         // New symbol, add to array
-        char *new_name = malloc(strlen(temp_symbol.name));
-        strncpy(new_name, temp_symbol.name, strlen(temp_symbol.name));
+        size_t new_len = strlen(temp_symbol.name) + 1;
+        char *new_name = malloc(new_len);
+        strncpy(new_name, temp_symbol.name, new_len - 1);
+        new_name[new_len -1] = '\0';
         symbols[symbol_count] = temp_symbol;
         symbols[symbol_count].name = new_name;
         symbol_count++;
