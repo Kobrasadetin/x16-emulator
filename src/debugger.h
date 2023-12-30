@@ -35,8 +35,9 @@ void DEBUGFreeUI();
 #define DBG_LBLX 		(26) 									// Debug labels start here
 #define DBG_DATX		(30)									// Debug data starts here.
 #define DBG_STCK		(40)									// Debug stack starts here.
+#define DBG_STCK_MIN	(57)									// Alternative minimalistic debug stack starts here.
 #define DBG_MEMX 		(1)										// Memory Display starts here
-#define DBG_ZP_REG   (45)                             // Zero page registers start here
+#define DBG_ZP_REG      (45)                                    // Zero page registers start here
 
 #define DMODE_STOP 		(0)										// Debugger is waiting for action.
 #define DMODE_STEP 		(1)										// Debugger is doing a single step

@@ -436,7 +436,7 @@ usage()
 	printf("-debug [<address>]\n");
 	printf("\tEnable debugger. Optionally, set a breakpoint\n");
     printf("-symbols <symbol table>\n");
-	printf("\tSet symbol table. Memory locations in the table are considered symbols.\n");
+	printf("\tUse a symbol table. Currently supports llvm-mos: execute \"objdump -t <.elf/.o file>\" and set the output as argument.\n");
 	printf("-randram\n");
 	printf("\t(deprecated, no effect)\n");
 	printf("-zeroram\n");

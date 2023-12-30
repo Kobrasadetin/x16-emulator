@@ -33,10 +33,11 @@ static void DEBUGVAddress(int x, int y, int addr, SDL_Color colour);
 
 static void DEBUGRenderData(int y,int data);
 static void DEBUGRenderZeroPageRegisters(int y);
-static int DEBUGRenderRegisters(void);
+static int DEBUGRenderRegisters(int status_regs_x_offset, int registers_x_offset);
 static void DEBUGRenderVRAM(int y, int data);
 static void DEBUGRenderCode(int lines,int initialPC);
 static void DEBUGRenderStack(int bytesCount);
+static void DEBUGRenderMinimalisticStack(int bytesCount);
 static void DEBUGRenderCmdLine(int x, int width, int height);
 static bool DEBUGBuildCmdLine(SDL_Keycode key);
 static void DEBUGExecCmd();
@@ -532,7 +533,11 @@ void DEBUGRenderDisplay(int width, int height) {
 	SDL_SetRenderDrawColor(dbgRenderer,0,0,0,SDL_ALPHA_OPAQUE);
 	SDL_RenderFillRect(dbgRenderer,&rc);
 
-	if (!showSymbols) DEBUGRenderRegisters();							// Draw register name and values.
+	if (!showSymbols) {                                         // Draw register name and values.
+        DEBUGRenderRegisters(DBG_LBLX, DBG_DATX);
+    } else {
+        DEBUGRenderRegisters(DBG_ZP_REG, DBG_ZP_REG+4);
+    }
 	DEBUGRenderCode(20, currentPC);							// Render 6502 disassembly.
 	if (dumpmode == DDUMP_RAM) {
 		DEBUGRenderData(21, currentData);
@@ -540,7 +545,11 @@ void DEBUGRenderDisplay(int width, int height) {
 	} else {
 		DEBUGRenderVRAM(21, currentData);
 	}
-    if (!showSymbols) DEBUGRenderStack(20);
+    if (!showSymbols) {
+        DEBUGRenderStack(20);
+    } else {
+        DEBUGRenderMinimalisticStack(20);
+    }
 
 	DEBUGRenderCmdLine(xPos, rc.w, height);
 }
@@ -658,6 +667,7 @@ static void DEBUGRenderCode(int lines, int initialPC) {
 	char buffer[32];
     int last_named_function = -1; // set to address when named function has been rendered
 	for (int y = 0; y < lines; y++) { 							// Each line
+        // render the name of the fuction on current line
         if (showSymbols && last_named_function != initialPC) {
             struct line_symbol* symbol = sym_find_symbol_by_address(initialPC);
             if (symbol!= NULL && symbol->type == SYM_FUNCTION) {
@@ -678,7 +688,6 @@ static void DEBUGRenderCode(int lines, int initialPC) {
         if (type == 0) {
 		    DEBUGString(dbgRenderer, DBG_ASMX+8, y, buffer, initialPC == pc ? col_highlight : col_data);
         } else {
-            // int controlFlow = type & 0x10;
             DEBUGString2col(
                 dbgRenderer,
                 DBG_ASMX+8,
@@ -703,43 +712,43 @@ static void DEBUGRenderCode(int lines, int initialPC) {
 static char *labels[] = { "NV-BDIZC","","","A","X","Y","","BKA","BKO", "PC","SP","","BRK","", "VA","VD0","VD1","VCT", NULL };
 
 
-static int DEBUGRenderRegisters(void) {
+static int DEBUGRenderRegisters(int status_regs_x_offset, int registers_x_offset) {
 	int n = 0,yc = 0;
 	while (labels[n] != NULL) {									// Labels
-		DEBUGString(dbgRenderer, DBG_LBLX,n,labels[n], col_label);n++;
+		DEBUGString(dbgRenderer, status_regs_x_offset,n,labels[n], col_label);n++;
 	}
 	yc++;
-	DEBUGNumber(DBG_LBLX, yc, (status >> 7) & 1, 1, col_data);
-	DEBUGNumber(DBG_LBLX+1, yc, (status >> 6) & 1, 1, col_data);
-	DEBUGNumber(DBG_LBLX+3, yc, (status >> 4) & 1, 1, col_data);
-	DEBUGNumber(DBG_LBLX+4, yc, (status >> 3) & 1, 1, col_data);
-	DEBUGNumber(DBG_LBLX+5, yc, (status >> 2) & 1, 1, col_data);
-	DEBUGNumber(DBG_LBLX+6, yc, (status >> 1) & 1, 1, col_data);
-	DEBUGNumber(DBG_LBLX+7, yc, (status >> 0) & 1, 1, col_data);
+	DEBUGNumber(status_regs_x_offset, yc, (status >> 7) & 1, 1, col_data);
+	DEBUGNumber(status_regs_x_offset+1, yc, (status >> 6) & 1, 1, col_data);
+	DEBUGNumber(status_regs_x_offset+3, yc, (status >> 4) & 1, 1, col_data);
+	DEBUGNumber(status_regs_x_offset+4, yc, (status >> 3) & 1, 1, col_data);
+	DEBUGNumber(status_regs_x_offset+5, yc, (status >> 2) & 1, 1, col_data);
+	DEBUGNumber(status_regs_x_offset+6, yc, (status >> 1) & 1, 1, col_data);
+	DEBUGNumber(status_regs_x_offset+7, yc, (status >> 0) & 1, 1, col_data);
 	yc+= 2;
 
-	DEBUGNumber(DBG_DATX, yc++, a, 2, col_data);
-	DEBUGNumber(DBG_DATX, yc++, x, 2, col_data);
-	DEBUGNumber(DBG_DATX, yc++, y, 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, a, 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, x, 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, y, 2, col_data);
 	yc++;
 
-	DEBUGNumber(DBG_DATX, yc++, memory_get_ram_bank(), 2, col_data);
-	DEBUGNumber(DBG_DATX, yc++, memory_get_rom_bank(), 2, col_data);
-	DEBUGNumber(DBG_DATX, yc++, pc, 4, col_data);
-	DEBUGNumber(DBG_DATX, yc++, sp|0x100, 4, col_data);
+	DEBUGNumber(registers_x_offset, yc++, memory_get_ram_bank(), 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, memory_get_rom_bank(), 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, pc, 4, col_data);
+	DEBUGNumber(registers_x_offset, yc++, sp|0x100, 4, col_data);
 	yc++;
 
 	if (breakPoint.bank < 0) {
-		DEBUGNumber(DBG_DATX, yc++, (uint16_t)breakPoint.pc, 4, col_data);
+		DEBUGNumber(registers_x_offset, yc++, (uint16_t)breakPoint.pc, 4, col_data);
 	} else {
-		DEBUGNumber(DBG_DATX, yc++, (breakPoint.bank << 16) | breakPoint.pc, 6, col_data);
+		DEBUGNumber(registers_x_offset, yc++, (breakPoint.bank << 16) | breakPoint.pc, 6, col_data);
 	}
 	yc++;
 
-	DEBUGNumber(DBG_DATX, yc++, video_read(0, true) | (video_read(1, true)<<8) | (video_read(2, true)<<16), 2, col_data);
-	DEBUGNumber(DBG_DATX, yc++, video_read(3, true), 2, col_data);
-	DEBUGNumber(DBG_DATX, yc++, video_read(4, true), 2, col_data);
-	DEBUGNumber(DBG_DATX, yc++, video_read(5, true), 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, video_read(0, true) | (video_read(1, true)<<8) | (video_read(2, true)<<16), 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, video_read(3, true), 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, video_read(4, true), 2, col_data);
+	DEBUGNumber(registers_x_offset, yc++, video_read(5, true), 2, col_data);
 
 	return n; 													// Number of code display lines
 }
@@ -758,6 +767,17 @@ static void DEBUGRenderStack(int bytesCount) {
 		int byte = real_read6502((data++) & 0xFFFF, false, 0);
 		DEBUGNumber(DBG_STCK+5,y,byte,2, col_data);
 		DEBUGWrite(dbgRenderer, DBG_STCK+9,y,byte, col_data);
+		y++;
+		data= (data & 0xFF) | 0x100;
+	}
+}
+
+static void DEBUGRenderMinimalisticStack(int bytesCount) {
+	int data= (sp+1) | 0x100;
+	int y= 0;
+	while (y < bytesCount) {
+		int byte = real_read6502((data++) & 0xFFFF, false, 0);
+		DEBUGNumber(DBG_STCK_MIN,y,byte,2, col_data);
 		y++;
 		data= (data & 0xFF) | 0x100;
 	}
