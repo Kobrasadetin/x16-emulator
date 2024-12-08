@@ -37,6 +37,7 @@ struct line_symbol {
 extern int symbol_count;
 
 struct line_symbol *sym_find_symbol_by_address(int address);
+struct line_symbol *sym_find_by_address_in_range(int address, int range);
 void sym_print_symbols();
 int sym_load_symbols(FILE *symbols_file);
 

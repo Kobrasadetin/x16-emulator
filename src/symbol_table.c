@@ -11,6 +11,12 @@
 
 struct line_symbol symbols[SYM_MAX_SYMBOLS];
 int symbol_count = 0;
+char temp_result_name[32];
+struct line_symbol temp_result_symbol = {
+    0,
+    0,
+    temp_result_name
+};
 
 int compare_symbols(const void *a, const void *b) {
     const struct line_symbol *symbol1 = (const struct line_symbol *)a;
@@ -31,7 +37,9 @@ int find_symbol_by_address(int address) {
     return -1; // Symbol not found
 }
 
-struct line_symbol *sym_find_symbol_by_address(int address) {
+
+
+struct line_symbol *sym_find_by_address_in_range(int address, int search_range) {
     int low = 0;
     int high = symbol_count - 1;
 
@@ -45,7 +53,20 @@ struct line_symbol *sym_find_symbol_by_address(int address) {
             high = mid - 1;
         }
     }
+    // After binary search, check if the closest preceding symbol is within search range
+    if (low > 0 && (address - symbols[low - 1].address) <= search_range) {
+        struct line_symbol closest = symbols[low - 1];
+        int distance = address - closest.address;
+        temp_result_symbol.address = closest.address;
+        temp_result_symbol.type = closest.type;
+        snprintf(temp_result_name, sizeof(temp_result_name), "%.14s +%d", closest.name, distance);
+        return &temp_result_symbol;
+    }
     return NULL; // Symbol not found
+}
+
+struct line_symbol *sym_find_symbol_by_address(int address) {
+    return sym_find_by_address_in_range(address, 0);
 }
 
 // Print the symbols currently loaded
