@@ -12,6 +12,7 @@
 #include <SDL.h>
 #include <zlib.h>
 #include <inttypes.h>
+#include <stdio.h>
 
 struct x16file
 {
@@ -27,7 +28,7 @@ struct x16file
 
 struct x16file *open_files = NULL;
 
-static bool 
+static bool
 get_tmp_name(char *path_buffer, const char *original_path, char const *extension)
 {
 	if(strlen(original_path) > PATH_MAX - strlen(extension)) {
@@ -41,7 +42,7 @@ get_tmp_name(char *path_buffer, const char *original_path, char const *extension
 	return true;
 }
 
-bool 
+bool
 file_is_compressed_type(char const *path)
 {
 	int len = (int)strlen(path);
@@ -166,7 +167,7 @@ error:
 	return NULL;
 }
 
-void 
+void
 x16close(struct x16file *f)
 {
 	if(f == NULL) {
@@ -247,7 +248,7 @@ tmp_path_error:
 	free(f);
 }
 
-int64_t 
+int64_t
 x16size(struct x16file *f)
 {
 	if(f == NULL) {
@@ -257,7 +258,7 @@ x16size(struct x16file *f)
 	return f->size;
 }
 
-int 
+int
 x16seek(struct x16file *f, int64_t pos, int origin)
 {
 	if(f == NULL) {
@@ -282,7 +283,7 @@ x16seek(struct x16file *f, int64_t pos, int origin)
 	return SDL_RWseek(f->file, f->pos, SEEK_SET);
 }
 
-int64_t 
+int64_t
 x16tell(struct x16file *f)
 {
 	if(f == NULL) {
@@ -291,7 +292,7 @@ x16tell(struct x16file *f)
 	return f->pos;
 }
 
-int 
+int
 x16write8(struct x16file *f, uint8_t val)
 {
 	if(f == NULL) {
@@ -302,7 +303,7 @@ x16write8(struct x16file *f, uint8_t val)
 	return written;
 }
 
-uint8_t 
+uint8_t
 x16read8(struct x16file *f)
 {
 	if(f == NULL) {
@@ -314,7 +315,7 @@ x16read8(struct x16file *f)
 	return read;
 }
 
-uint64_t 
+uint64_t
 x16write(struct x16file *f, const uint8_t *data, uint64_t data_size, uint64_t data_count)
 {
 	if(f == NULL) {
@@ -328,7 +329,7 @@ x16write(struct x16file *f, const uint8_t *data, uint64_t data_size, uint64_t da
 	return written;
 }
 
-uint64_t 
+uint64_t
 x16read(struct x16file *f, uint8_t *data, uint64_t data_size, uint64_t data_count)
 {
 	if(f == NULL) {

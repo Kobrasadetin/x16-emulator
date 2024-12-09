@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <SDL.h>
 
+#include "cpu/registers.h"
+
 //#define TRACE
 //#define PERFSTAT
 
@@ -50,8 +52,8 @@ typedef enum {
 	RECORD_GIF_ACTIVE
 } gif_recorder_state_t;
 
-extern uint8_t a, x, y, sp, status;
-extern uint16_t pc;
+extern struct regs regs;
+extern uint16_t opcode_addr;
 extern uint8_t *RAM;
 extern uint8_t ROM[];
 extern uint8_t *CART;
@@ -98,6 +100,8 @@ extern uint8_t nvram[0x40];
 extern uint8_t MHZ;
 
 extern bool mouse_grabbed;
+extern bool no_keyboard_capture;
 extern bool kernal_mouse_enabled;
 extern char window_title[];
+extern bool pwr_long_press;
 #endif
